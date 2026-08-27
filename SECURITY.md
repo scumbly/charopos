@@ -14,7 +14,7 @@ Charopos is a personal project maintained in spare time, so there's no guarantee
 
 ## Supported versions
 
-The `main` branch only. Charopos is distributed as source you build yourself, so a fix reaches you with `git pull && ./build.sh` — there are no releases to backport to and no binaries to re-issue.
+The latest release and the `main` branch. Fixes land on `main` and go out in the next release; nothing is backported to older tags. If you build from source, a fix reaches you with `git pull && ./build.sh`; if you use a downloaded build, replace it with the newer zip.
 
 ## Known and accepted risks
 
@@ -23,7 +23,7 @@ These are documented design trade-offs, described in more detail in the README's
 - **The control API speaks unencrypted HTTP.** Anyone who can observe traffic on a network where "All interfaces" is enabled can capture the token and gain full control. The mitigation is the "Tailscale only" bind mode, where WireGuard supplies the encryption Charopos doesn't.
 - **Credentials are stored unencrypted.** Service API keys and the DSM and Pi-hole passwords live in `~/Library/Application Support/Charopos/config.json`, mode `0600`. Anything running as your user account can read them, and they are copied into Time Machine backups in the clear. The Keychain was considered and rejected: under ad-hoc signing it would prompt on every rebuild, and its prompt-free mode carries the same exposure.
 - **The DSM password travels in a URL.** Synology's authentication API takes credentials as query parameters. Certificate pinning stops it being read off the network, but it still reaches the NAS's own webserver access log. Giving Charopos a dedicated, limited DSM account is the practical mitigation.
-- **Builds are ad-hoc signed and not notarized.** Gatekeeper cannot verify them; you are trusting the source you cloned.
+- **Builds are ad-hoc signed and not notarized.** There is no Developer ID behind them, so nothing binds a build to its author and macOS cannot tell an original from a substitute. This matters most for the download route: if this repository's release assets were ever tampered with, a downloaded build would carry no signal. Building from source narrows that — you compile code you can read — though it is not a complete answer either, since an attacker able to replace a release asset can often modify the source too. Reports of tampering are very much in scope.
 - **App Transport Security is broadly disabled.** It has to be — Charopos talks to NAS units and consoles serving self-signed certificates at addresses unknowable at build time. Local TLS identity is protected instead by trust-on-first-use certificate pinning (see below). The two internet endpoints the app calls, `api.prowlapp.com` and `api.ipify.org`, are exempted back into strict ATS.
 - **Charopos Remote can replace its own application bundle** with a copy fetched from the server, and there is no signature to verify it against. This is restricted to connections over a Tailscale address, where the transport is already authenticated and encrypted; it is refused on any other network.
 

@@ -36,7 +36,25 @@ Status is never colour alone — services are circles, drives are squares, warni
 
 Everything else is optional and discovered through settings — Charopos runs perfectly well watching two services and nothing else.
 
-## Build and install
+## Install
+
+Both apps are universal binaries (Apple Silicon and Intel), so either route works on any Mac, and you can copy Charopos Remote to a machine of either kind.
+
+### Option A — download a build
+
+Grab the latest zip from [Releases](https://github.com/scumbly/charopos/releases), unzip it, and move **Charopos.app** (and **Charopos Remote.app**, if you want it) wherever you keep applications.
+
+Builds are **ad-hoc signed** — there's no paid Apple Developer ID behind them, and they aren't notarized — so macOS blocks a *downloaded* copy on first launch. Try to open it once and dismiss the warning, then go to **System Settings → Privacy & Security**, scroll to the bottom, and click **Open Anyway**.
+
+(The old right-click → **Open** trick no longer works: macOS 15 removed it, and 15.1 closed the remaining routes.)
+
+If you'd rather clear the quarantine flag directly:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Charopos.app
+```
+
+### Option B — build from source
 
 `build.sh` writes both apps to the **parent** of the repo folder, so clone it wherever you want the apps to end up:
 
@@ -49,19 +67,13 @@ cd charopos
 
 That produces `~/Applications/Charopos.app` and `~/Applications/Charopos Remote.app`.
 
-The build is **ad-hoc signed** — there's no Apple Developer ID behind it — so Gatekeeper will refuse the first launch. Right-click the app and choose **Open**, then confirm. Once is enough. If you'd rather clear the quarantine flag directly:
-
-```bash
-xattr -dr com.apple.quarantine ~/Applications/Charopos.app
-```
-
-Both apps are built as universal binaries (Apple Silicon and Intel), so one clone runs on any Mac and you can copy Charopos Remote to a machine of either kind.
+**This path has no Gatekeeper step at all.** Quarantine is applied to things you download, not to things you compile, so an app you built yourself just opens. It's the smoother of the two routes, and it's the one where you can read what you're running.
 
 **Expect a short series of permission prompts on first launch** — "Charopos would like to access files on a removable volume", then a network volume, and so on. Charopos asks for these deliberately and up front, at a moment you're expecting them, rather than silently failing to see a drive later. Answer **Allow**. Each one blocks startup until you do, so if the app seems to hang on launch with nothing in its log after `Charopos … started`, look for a dialog waiting behind another window.
 
 They come back after a rebuild. Ad-hoc signing has no stable identity — the signature is a hash of the binary, so it changes every time you build — and macOS treats each build as a new app that hasn't been granted anything yet. Nothing is wrong; click through them again.
 
-To update later, `git pull && ./build.sh`. Quit the app first — the build can't replace a running bundle.
+To update a source build, `git pull && ./build.sh`. Quit the app first — the build can't replace a running bundle. For a downloaded build, grab the newer zip and replace the app.
 
 ## First run
 
@@ -138,7 +150,7 @@ Charopos controls a server, so it's worth being precise about what it does and d
 
 **The DSM password is sent in a URL.** Synology's authentication API takes credentials as query parameters — that's their design, not a choice Charopos makes. Certificate pinning stops it being read off the network, but it still lands in the NAS's own webserver access log. Consider giving Charopos its own DSM account with only the permissions it needs, rather than an administrator you use elsewhere.
 
-**Nothing is notarized.** Ad-hoc signing means Gatekeeper can't verify the build, which is exactly why you have to right-click → Open. You are trusting the source you cloned.
+**Nothing is signed by a verified developer.** Builds are ad-hoc signed and not notarized, so macOS can't tell you who produced them or whether they've been altered — which is why a downloaded copy needs the **Open Anyway** step. If that matters to you, build from source (Option B): you compile it yourself from code you can read, and nothing arrives over the wire as a binary.
 
 **Charopos Remote can update itself over the network**, fetching a copy of the app from the server and replacing itself. There's no signature check on what comes back, so the transport is the only thing protecting it — another reason to prefer Tailscale. Build from source on both machines and you'll never invoke it.
 
