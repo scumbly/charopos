@@ -1,0 +1,1141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Charopos">
+<link rel="apple-touch-icon" href="/icon.png">
+<link rel="icon" type="image/png" id="favicon">
+<title>Charopos</title>
+<style>
+  :root {
+    --bg: #f2f2f7; --card: #ffffff; --text: #1c1c1e; --sub: #8e8e93;
+    --green: #34c759; --red: #ff3b30; --blue: #007aff; --border: #d1d1d6;
+    --orange: #ff9500; --forest: #1b5e20; --btnglyph: #48484a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #000000; --card: #1c1c1e; --text: #f2f2f7; --sub: #98989d;
+      --green: #30d158; --red: #ff453a; --blue: #0a84ff; --border: #38383a;
+      --orange: #ff9f0a; --forest: #43a047; --btnglyph: #c7c7cc;
+    }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0; padding: 16px; padding-top: max(16px, env(safe-area-inset-top));
+    background: var(--bg); color: var(--text);
+    font: 16px -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+    max-width: 560px; margin-left: auto; margin-right: auto;
+    box-sizing: border-box;
+    display: flex; flex-direction: column; min-height: 100dvh;
+  }
+  /* Flexible spacers center the connected content vertically while Advanced is
+     collapsed. Expanding zeroes the top spacer (brisk transition) so the fold
+     glides to the top; the bottom spacer absorbs the slack on tall screens. */
+  #vtop, #vbot { flex: 1 1 0; }
+  #vtop { transition: flex-grow 0.25s ease; }
+  body.advanced-open #vtop { flex-grow: 0; }
+  body.embed-mode #vtop, body.embed-mode #vbot { display: none; }
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+  header img { width: 76px; height: 76px; border-radius: 16px; }
+  header h1 { font-size: 22px; margin: 0; }
+  #ver { font-size: 11px; color: var(--sub); margin-top: 1px; }
+  #osupdate { font-size: 11px; color: var(--blue); margin-top: 1px; }
+  .hinfo { flex: 1; }
+  #conn { font-size: 13px; color: var(--sub); padding: 6px 10px; }
+  #conn::before {
+    content: ""; display: inline-block;
+    width: 7px; height: 7px; border-radius: 50%;
+    margin-right: 4px; vertical-align: -1px; flex-shrink: 0;
+  }
+  #conn.ok::before       { background: var(--green); }
+  #conn.bad::before      { background: var(--red); }
+  #conn.rebooting::before { background: var(--blue); animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+  .card {
+    background: var(--card); border-radius: 12px; padding: 4px 16px;
+    margin-bottom: 16px;
+  }
+  .row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 0; border-bottom: 1px solid var(--border);
+  }
+  .row:last-child { border-bottom: none; }
+  /* Actions as a 2-column grid (web only). Row-major fill; the per-row hairline
+     reads as a table rule across both cells. Collapses to a single column on
+     narrow phones so the halved width can't truncate a title. */
+  #rows { display: grid; grid-template-columns: 1fr 1fr; column-gap: 18px; }
+  @media (max-width: 430px) { #rows { grid-template-columns: 1fr; } }
+  .row .info { flex: 1; min-width: 0; }
+  .row .title { font-weight: 600; }
+  .row .status { font-size: 11px; color: var(--sub); margin-top: 2px; }   /* v4.79: −15% (was 13px) */
+  .status.green { color: var(--green); } .status.red { color: var(--red); }
+  .status.blue { color: var(--blue); }
+  button {
+    font: inherit; font-weight: 600; border: none; border-radius: 10px;
+    padding: 10px 18px; background: var(--bg); color: var(--blue);
+    cursor: pointer; flex-shrink: 0;
+  }
+  button:active { opacity: 0.5; }
+  button.stop { color: var(--red); }
+  /* Icon-only action buttons (Run/Stop/Pause) — the SVG inherits the button's color. */
+  .btnico { width: 30px; height: 30px; fill: currentColor; display: block; margin: 0 auto; }
+  /* Round (not pill) icon buttons, no color tint — neutral accent like the rest.
+     v4.77: button shrunk 30% (56→39px); the glyph (.btnico) stays 30px. */
+  .iconbtn { border-radius: 50%; width: 39px; height: 39px; padding: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--btnglyph); }   /* dark grey glyph (was inherited --blue) */
+  button.wide { width: 100%; margin: 12px 0; padding: 14px; font-size: 1.8em;
+    text-shadow: 1px 1px 0 rgba(0,0,0,0.1);
+    background: var(--card); border: 1px solid var(--border); }
+  /* Dialog action buttons reuse .wide (1.8em) — size them down to 1.08em, drop the
+     inherited drop shadow, and go white-on-blue on hover. */
+  #infomodal button, #updatedialog button, #rebootdialog button {
+    font-size: 1.08em; text-shadow: none;
+  }
+  #infomodal button:hover, #updatedialog button:hover, #rebootdialog button:hover {
+    background: var(--blue); color: #fff;
+  }
+  /* Destructive actions (e.g. Force Reboot) hover red, not blue. */
+  #infomodal button.stop:hover, #updatedialog button.stop:hover, #rebootdialog button.stop:hover {
+    background: var(--red); color: #fff;
+  }
+  /* Top bar: Kickstart (2/3, left) beside the overall-status light + Advanced (1/3) */
+  #topbar { display: flex; gap: 12px; align-items: stretch; margin-bottom: 12px; }
+  #kickstart-btn { flex: 2; width: auto; margin: 0; font-size: 1.53em; color: var(--text);
+    overflow: hidden; max-width: 400px; max-height: 120px;
+    transition: max-width 0.25s ease, max-height 0.25s ease, opacity 0.2s ease,
+                padding 0.25s ease, margin 0.25s ease, border-width 0.25s ease;
+    text-shadow: 1px 1px 2px color-mix(in srgb, var(--forest) 35%, transparent); }
+  #kickstart-btn:hover { background: var(--blue); color: #fff; }
+  /* Busy (a script is running): disabled, dimmed, no hover affordance. */
+  #kickstart-btn:disabled { opacity: 0.55; cursor: default; text-shadow: none; }
+  #kickstart-btn:disabled:hover { background: none; color: var(--text); }
+  /* Inline spinner for the busy Kickstart button, sized to its larger text. */
+  #kickstart-btn .btnspin { display: inline-block; width: 0.85em; height: 0.85em;
+    vertical-align: -0.1em; margin-right: 0.45em; border: 2px solid var(--border);
+    border-top-color: var(--blue); border-radius: 50%; animation: spin 0.8s linear infinite; }
+  /* Advanced engaged: the header Kickstart button slides away (run it from Actions instead). */
+  body.advanced-open #kickstart-btn { max-width: 0; max-height: 0; opacity: 0;
+    padding: 0; margin: 0; border-width: 0; }
+  /* Engaged: the top bar's content is gone (Kickstart slid away, #overall hidden);
+     drop its margin so no empty gap remains before the advanced section. */
+  body.advanced-open #topbar { margin-bottom: 0; }
+  #overall { flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  /* Advanced engaged: the overall light + its Advanced button disappear (Advanced
+     relocates to the header). With Kickstart slid away, the whole top bar collapses. */
+  body.advanced-open #overall { display: none; }
+  #overall-light {
+    flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 8px 10px; font-size: 14px; font-weight: 600;
+    text-align: center; line-height: 1.2;
+  }
+  #overall-dot { width: 12px; height: 12px; border-radius: 50%;
+    background: var(--border); flex-shrink: 0; }
+  /* Streaming: a larger version of the Plex playback pill's arc spinner. */
+  #overall-dot.spinning {
+    width: 15px; height: 15px;
+    background: transparent;
+    border: 3px solid var(--green);
+    border-right-color: color-mix(in srgb, var(--green) 50%, transparent);
+    animation: plexspin 4s linear infinite;
+  }
+  #advanced-btn { width: 100%; font-size: 0.85em; color: var(--text);
+    background: var(--card); border: 1px solid var(--border); }
+  #advanced-btn.active { border-color: var(--blue); }
+  /* Header-right column: connection light on top; the expanded-mode Advanced
+     button (#advanced-btn-hdr) sits below it, baseline aligned with the logo. */
+  #hdr-right { display: flex; flex-direction: column; align-items: flex-end; }
+  body.advanced-open #hdr-right { align-self: stretch; justify-content: space-between; }
+  #advanced-btn-hdr { display: none; font-size: 0.85em; padding: 5px 12px;
+    background: var(--card); color: var(--text); border: 1px solid var(--blue); }
+  /* Shift it up 13px to tuck it closer under the connection light. */
+  body.advanced-open #advanced-btn-hdr { display: block; transform: translateY(-13px); }
+  /* Advanced section slides open/closed by animating its grid row 0fr<->1fr
+     (animates real height); #advanced-inner clips the content during the slide. */
+  #advanced-section { display: grid; grid-template-rows: 1fr;
+    transition: grid-template-rows 0.25s ease; }
+  body:not(.advanced-open) #advanced-section { grid-template-rows: 0fr; }
+  #advanced-inner { overflow: hidden; min-height: 0; }
+  footer { text-align: center; font-size: 11px; color: var(--sub);
+    opacity: 0.7; margin: 16px 0 8px; }
+  .spinner {
+    width: 18px; height: 18px; flex-shrink: 0;
+    border: 2px solid var(--border); border-top-color: var(--blue);
+    border-radius: 50%; animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #progress { height: 3px; border-radius: 2px; overflow: hidden;
+    background: var(--border); margin-bottom: 16px; position: relative; }
+  #progress div { position: absolute; width: 30%; height: 100%;
+    background: var(--blue); animation: slide 1.2s ease-in-out infinite; }
+  @keyframes slide { 0% { left: -30%; } 100% { left: 100%; } }
+  /* Respect Reduce Motion (parity with the desktop apps): stop the decorative
+     spins/pulses; the streaming arc, spinners, and rebooting dot stay visible
+     but static, and the indeterminate progress bar becomes a static full bar
+     rather than an empty/off-screen sweep. */
+  @media (prefers-reduced-motion: reduce) {
+    #overall-dot.spinning, #kickstart-btn .btnspin, .btnspin,
+    #conn.rebooting::before, #lights > .streaming::before {
+      animation: none !important;
+    }
+    #progress div { animation: none !important; left: 0; width: 100%; }
+  }
+  select {
+    font: inherit; padding: 8px 12px; border-radius: 10px;
+    border: 1px solid var(--border); background: var(--card); color: var(--text);
+  }
+  pre {
+    background: var(--card); border-radius: 12px; padding: 12px;
+    font: 11px ui-monospace, "SF Mono", Menlo, monospace;
+    height: 260px; overflow: auto; margin: 0;
+    -webkit-overflow-scrolling: touch; white-space: pre-wrap; word-break: break-all;
+  }
+  #alllights {
+    display: flex; flex-wrap: wrap; justify-content: space-between;
+    gap: 6px 8px; padding: 2px 0; margin-bottom: 10px;
+    font-size: 10px; color: var(--sub);
+  }
+  #lights, #naslights { display: contents; }
+  /* Inserted by balanceGrid() to force a wrap, balancing the last two rows. */
+  .flexbreak { flex-basis: 100%; height: 0; }
+  #lights > span, #lights > a,
+  #naslights > span, #naslights > a {
+    white-space: nowrap; text-decoration: none; color: inherit;
+    background: var(--card);
+    border-radius: 8px; padding: 2px 7px;
+    display: flex; align-items: center;
+    height: 18px; box-sizing: border-box; overflow: visible;
+    min-height: 0;   /* respect height even with a taller badge — it overlaps, doesn't stretch the pill */
+    zoom: 1.25;   /* +25% pill, text, dot, and badge (reflows; applies in tab mode too) */
+  }
+  #naslights > span, #naslights > a { border-radius: 1px; }
+  #lights > span::before, #lights > a::before {
+    content: "";
+    display: block; width: 8px; height: 8px;
+    border-radius: 50%; background: currentColor;
+    flex-shrink: 0; margin-right: 5px;
+  }
+  #naslights > span::before, #naslights > a::before {
+    content: ""; display: inline-block;
+    width: 7px; height: 7px; border-radius: 1px;
+    vertical-align: middle; margin-right: 5px;
+    background: currentColor;
+  }
+  #lights .ok::before, #naslights .ok::before   { color: var(--green); }
+  #lights .warn::before                         { color: var(--red); }
+  #naslights .warn::before                      { color: var(--orange); }
+  #naslights .bad::before                       { color: var(--red); }
+  #naslights .idle::before                      { color: var(--border); }
+  #lights .issue::before                        { color: var(--orange); }
+  #lights .queued::before                       { color: var(--blue); }
+  /* Non-color status cues (mirrors the desktop app): shape varies with state so
+     status survives grayscale / color-blind viewing. Same box metrics as the dot:
+     down/red = diamond (rotated square), warning/orange = triangle (clip-path),
+     idle = hollow. Healthy keeps the calm dot. */
+  #lights .warn::before, #naslights .bad::before {
+    border-radius: 1px; transform: rotate(45deg);
+  }
+  #lights .issue::before, #naslights .warn::before {
+    border-radius: 0; clip-path: polygon(50% 0, 100% 100%, 0 100%);
+  }
+  #naslights .idle::before {
+    background: none; border: 1.5px solid var(--border);
+    width: 4px; height: 4px;
+  }
+  #lights.offline span::before,
+  #lights.offline a::before,
+  #naslights.offline span::before,
+  #naslights.offline a::before                  { color: var(--border); }
+  .logfilter { min-width: 0; font: inherit; font-size: 13px;
+    padding: 6px 10px; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--card); color: var(--text); flex: 1; }
+  #logdetails { margin-bottom: 8px; }
+  #logheader { display: flex; align-items: center; gap: 8px; }
+  #logselect { flex: 1 1 0; min-width: 0; }
+  #logheader .logfilter { flex: 1 1 0; }
+  #logcontent { margin-top: 6px; }
+  /* Count badge: inline, left of the label (replaces the status dot), vertically
+     centered. Takes its own horizontal space (may widen the pill), but the pill's
+     min-height: 0 means a taller badge overlaps vertically instead of stretching it. */
+  #lights > span[data-badge]::before, #lights > a[data-badge]::before { display: none; }
+  .badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 16px; height: 16px; border-radius: 50%;
+    background: var(--blue); color: #fff;
+    font-size: 9px; font-weight: 700;
+    flex-shrink: 0; margin-right: 5px; line-height: 1;
+  }
+  #lights.offline .badge { background: var(--border); }
+  /* Plex streaming: CSS arc spinner — no Unicode, no font dependency */
+  @keyframes plexspin { to { transform: rotate(360deg); } }
+  #lights > .streaming::before {
+    width: 4px; height: 4px;
+    margin-top: -2px; margin-bottom: -2px;
+    background: transparent;
+    border: 4px solid currentColor;
+    border-right-color: color-mix(in srgb, currentColor 50%, transparent);
+    animation: plexspin 4s linear infinite;
+  }
+  /* Update pill: whole pill goes blue, dot hidden; clicking triggers the update */
+  #lights > .update {
+    background: var(--blue); color: #fff;
+  }
+  /* Always show the status dot on an update pill — green when otherwise healthy,
+     so the light stays visible even with no superseding red/orange (matches desktop). */
+  #lights > .update::before { display: block; background: var(--green); }
+  /* Update pill that also has a (non-update) health warning: dot goes orange. */
+  #lights > .update.alerted::before { background: var(--orange); }
+  #lights.offline > .update { background: var(--border); color: var(--sub); pointer-events: none; }
+  /* Badge on blue update pill: invert to white circle + blue number (matches desktop) */
+  #lights > .update .badge { background: rgba(255,255,255,0.9); color: var(--blue); }
+  /* NAS update pill: blue background + white text like the service update pill.
+     The dot is NOT recolored here — the health class (.ok/.warn/.bad::before)
+     keeps it green/orange/red, so an update shows even on a degraded unit. */
+  #naslights > .nasupd {
+    background: var(--blue); color: #fff;
+  }
+  #naslights.offline > .nasupd { background: var(--border); color: var(--sub); pointer-events: none; }
+  /* Hover underline on clickable lights — label span only, not the badge */
+  #lights > a:hover > span:last-child, #naslights > a:hover { text-decoration: underline; }
+  #dash.offline button:not(#force-reboot-btn):not(#embed-close):not(#embed-open) { color: var(--sub); pointer-events: none; }
+  #dash.offline .status { color: var(--sub) !important; }
+  .infobtn {
+    font-size: 15px; background: none; border: none; padding: 0 2px;
+    color: var(--sub); cursor: pointer; flex-shrink: 0; line-height: 1;
+  }
+  .infobtn:active { opacity: 0.5; }
+  #infomodal {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.45);
+    align-items: center; justify-content: center; z-index: 100;
+  }
+  #infocontent {
+    background: var(--card); border-radius: 16px; padding: 20px 22px;
+    max-width: 320px; width: calc(100% - 32px);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+  }
+  #infotitle { font-size: 15px; font-weight: 700; margin-bottom: 9px; }
+  #infobody { font-size: 13px; color: var(--sub); white-space: pre-wrap;
+    margin-bottom: 16px; line-height: 1.5; }
+  #tokenform input {
+    font: inherit; width: 100%; padding: 12px; margin: 12px 0;
+    border-radius: 10px; border: 1px solid var(--border);
+    background: var(--card); color: var(--text);
+  }
+  #tokenform p { color: var(--sub); font-size: 14px; }
+  #updatedialog, #rebootdialog {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.45);
+    align-items: center; justify-content: center; z-index: 100;
+  }
+  #updatedialogcontent, #rebootdialogcontent {
+    background: var(--card); border-radius: 16px; padding: 20px 22px;
+    max-width: 280px; width: calc(100% - 32px);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+  }
+  #updatedialogtitle, #rebootdialogtitle { font-size: 15px; font-weight: 700; margin-bottom: 14px; text-align: center; }
+  #updatedialogbtns, #rebootdialogbtns { display: flex; flex-direction: column; gap: 8px; }
+  #updatedialogbtns button, #rebootdialogbtns button { margin: 0; }
+  #rebootdialogmsg { font-size: 13px; color: var(--sub); text-align: center; margin-bottom: 14px; line-height: 1.4; }
+  /* ---- Inline embed panel ---- */
+  #embed-bar { display: none; align-items: center; gap: 8px; margin-bottom: 8px; }
+  #embed-label { font-size: 13px; font-weight: 600; flex: 1;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #embed-close, #embed-open { font-size: 12px; padding: 6px 14px; flex-shrink: 0; }
+  #embed-frame {
+    display: none; width: 100%; border: none;
+    border-radius: 0 0 12px 12px;
+    height: calc(100dvh - 210px); min-height: 400px;
+    background: var(--card);
+  }
+  /* Non-embed active highlight (fallback — class only set in embed mode) */
+  #lights > a.active-embed, #naslights > a.active-embed {
+    outline: 2px solid var(--blue); outline-offset: 1px;
+  }
+  /* Embed mode: widen layout, hide Kickstart / action rows / logs.
+     The body itself goes edge-to-edge (no max-width, no h-padding) so the iframe's
+     plain width:100% fills the window — a negative-margin "full-bleed" fought the
+     flex-column layout and got clipped to the old 900px column. overflow-x:hidden is
+     safe now that the body IS the viewport width (it clips the mobile scale overflow
+     at the window edge, not the iframe). */
+  body.embed-mode {
+    max-width: none; padding-left: 0; padding-right: 0; overflow-x: hidden;
+  }
+  /* Keep the top chrome centered within 900px as before — only the iframe is full width. */
+  body.embed-mode > header,
+  body.embed-mode #embed-bar {
+    width: 100%; max-width: 900px; margin-left: auto; margin-right: auto;
+    padding-left: 16px; padding-right: 16px; box-sizing: border-box;
+  }
+  body.embed-mode #embed-bar { display: flex; }
+  body.embed-mode #embed-frame {
+    display: block;         /* width:100% from the base rule now spans the full-width body */
+    border-radius: 0;
+  }
+  body.embed-mode #topbar,
+  body.embed-mode #rows,
+  body.embed-mode #progress,
+  body.embed-mode #logdetails { display: none; }
+  /* Status grid as tabs in embed mode */
+  body.embed-mode #alllights {
+    gap: 0; margin-bottom: 0; justify-content: center;
+    padding-bottom: 0;   /* base #alllights has 2px bottom padding — remove it so the
+                            tabs rest flush on the iframe instead of floating ~2-3px above */
+  }
+  body.embed-mode #lights > span, body.embed-mode #lights > a,
+  body.embed-mode #naslights > span, body.embed-mode #naslights > a {
+    border: 1px solid var(--border);
+    border-bottom: none;
+    border-radius: 8px 8px 0 0;
+    background: var(--bg);
+  }
+  body.embed-mode #naslights > span, body.embed-mode #naslights > a {
+    border-radius: 1px 1px 0 0;
+  }
+  body.embed-mode #lights > a.active-embed,
+  body.embed-mode #naslights > a.active-embed {
+    outline: none;
+    border-color: var(--blue);
+    color: var(--blue);
+    background: var(--card);
+  }
+  /* An update pill keeps its blue fill when it appears as a tab in embed mode
+     (the generic tab rule above would otherwise repaint it with --bg). */
+  body.embed-mode #lights > a.update {
+    background: var(--blue); color: #fff; border-color: var(--blue);
+  }
+  body.embed-mode #lights > .no-embed,
+  body.embed-mode #lights > span,
+  body.embed-mode #naslights > .no-embed,
+  body.embed-mode #naslights > span { display: none; }
+  @media (max-width: 600px) {
+    /* Render the service UI at 1/0.75 the window width, then scale 0.75 → visually
+       full-window. The 133% layout width overflows the (full-width) body; the body's
+       overflow-x:hidden clips that at the window edge. */
+    body.embed-mode #embed-frame {
+      width: calc(100% / 0.75);
+      height: calc((100dvh - 210px) / 0.75);
+      min-height: calc(400px / 0.75);
+      transform: scale(0.75);
+      transform-origin: top left;
+    }
+  }
+</style>
+</head>
+<body>
+<div id="vtop"></div>
+<header>
+  <img src="/artwork.png" alt="">
+  <div class="hinfo">
+    <h1>Charopos</h1>
+    <div id="ver"></div>
+    <div id="osupdate" hidden>macOS update available</div>
+  </div>
+  <div id="hdr-right">
+    <span id="conn">connecting…</span>
+    <button id="advanced-btn-hdr" onclick="toggleAdvanced()">Advanced</button>
+  </div>
+</header>
+
+<div id="infomodal" onclick="if(event.target===this)closeInfo()">
+  <div id="infocontent">
+    <div id="infotitle"></div>
+    <div id="infobody"></div>
+    <button class="wide" style="margin:0" onclick="closeInfo()">Done</button>
+  </div>
+</div>
+
+<div id="updatedialog" onclick="if(event.target===this)closeUpdateDialog()">
+  <div id="updatedialogcontent">
+    <div id="updatedialogtitle"></div>
+    <div id="updatedialogbtns">
+      <button class="wide" id="updatedialog-run">Run Update</button>
+      <button class="wide" id="updatedialog-single" hidden></button>
+      <button class="wide" id="updatedialog-open" hidden></button>
+      <button class="wide" onclick="closeUpdateDialog()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div id="rebootdialog" onclick="if(event.target===this)closeRebootDialog()">
+  <div id="rebootdialogcontent">
+    <div id="rebootdialogtitle">Reboot the server?</div>
+    <div id="rebootdialogmsg">Force Reboot skips save dialogs and force-quits apps blocking shutdown. Unsaved work in other apps will be lost.</div>
+    <div id="rebootdialogbtns">
+      <button class="wide" onclick="doReboot(false)">Reboot</button>
+      <button class="wide stop" onclick="doReboot(true)">Force Reboot</button>
+      <button class="wide" onclick="closeRebootDialog()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div id="tokenform" hidden>
+  <p>Enter the token shown under the version number (top-left) of the Charopos window
+     (also in launcher-remote-token.txt next to the app).</p>
+  <input id="tokeninput" placeholder="Token" autocapitalize="off" autocorrect="off">
+  <button class="wide" onclick="saveToken()">Connect</button>
+</div>
+
+
+<div id="dash" hidden>
+  <div id="topbar">
+    <button id="kickstart-btn" class="wide" onclick="kickstart()">Kickstart Plex</button>
+    <div id="overall">
+      <div id="overall-light"><span id="overall-dot"></span><span id="overall-label">Disconnected</span></div>
+      <button id="advanced-btn" onclick="toggleAdvanced()">Advanced</button>
+    </div>
+  </div>
+  <div id="embed-bar">
+    <span id="embed-label"></span>
+    <button id="embed-open" onclick="popEmbedOut()">⤴  Open</button>
+    <button id="embed-close" onclick="closeEmbed()">☒  Close</button>
+  </div>
+  <div id="advanced-section">
+  <div id="advanced-inner">
+  <div id="alllights"><div id="lights"></div><div id="naslights"></div>
+    <div id="emptystate" hidden style="color:#8a8a8e;font-size:14px;padding:6px 2px;">
+      Nothing monitored yet — add services and storage in the Charopos app (Settings, or "Run Setup Again…" from the menu-bar icon).
+    </div>
+  </div>
+  <iframe id="embed-frame" src="about:blank" allowfullscreen></iframe>
+  <div class="card" id="rows"></div>
+  <div id="progress" hidden><div></div></div>
+  <div id="logdetails">
+    <div id="logheader">
+      <select id="logselect" onchange="selectLog(this.value)">
+        <option value="auto">Latest</option>
+        <option value="charopos">Charopos</option>
+        <option value="updater">Updater</option>
+        <option value="mount">Mounts</option>
+        <option value="iperf">iperf3</option>
+        <option value="inventory">Inventory</option>
+        <option value="sonarr">Sonarr</option>
+        <option value="radarr">Radarr</option>
+        <option value="lidarr">Lidarr</option>
+        <option value="prowlarr">Prowlarr</option>
+        <option value="sab">SABnzbd</option>
+        <!-- v4.52 service logs — shown only when the server reports one present
+             (payload availableLogs); toggled in render(). -->
+        <option value="jellyfin" data-newlog hidden>Jellyfin</option>
+        <option value="bazarr" data-newlog hidden>Bazarr</option>
+        <option value="overseerr" data-newlog hidden>Overseerr</option>
+        <option value="tautulli" data-newlog hidden>Tautulli</option>
+        <option value="qbittorrent" data-newlog hidden>qBittorrent</option>
+      </select>
+      <input class="logfilter" id="logfilter" placeholder="Filter…" oninput="applyFilter()">
+    </div>
+    <div id="logcontent">
+      <pre id="log">—</pre>
+    </div>
+  </div>
+  </div>
+  </div>
+  <footer>
+    <span id="tokeninfo" onclick="copyToken()" style="cursor:pointer;display:block;margin-bottom:3px"></span>
+    © Jesse Holden 2026
+  </footer>
+</div>
+<div id="vbot"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+// Media-control icons for the action buttons (Run→play, Stop→stop, Pause→pause).
+const ICON = {
+  play:  '<svg class="btnico" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 3l9 5-9 5z"/></svg>',
+  stop:  '<svg class="btnico" viewBox="0 0 16 16" aria-hidden="true"><rect x="3.5" y="3.5" width="9" height="9" rx="1.5"/></svg>',
+  pause: '<svg class="btnico" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 3h2.6v10H4.5zM8.9 3h2.6v10H8.9z"/></svg>',
+};
+
+// Escape a value for plain HTML text or a double-quoted attribute. Labels and URLs
+// are user-editable in Settings — an unescaped quote/angle bracket breaks markup.
+const escHtml = s => String(s ?? '')
+  .replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+  .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+// Escape a value for a single-quoted JS string inside an inline on*="…" attribute:
+// JS-escape backslash/quote first, then HTML-escape (the attribute is parsed as
+// HTML before the JS runs). An apostrophe in a label used to kill the pill's onclick.
+const escArg = s => String(s ?? '')
+  .replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+  .replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+  .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+// Accessible status text for a pill (mirrors the desktop app's VoiceOver labels).
+const svcStatusWord = sv =>
+  sv.streaming ? 'streaming' : !sv.ok ? 'down' : sv.warn ? 'warning'
+  : sv.update ? 'update available' : (sv.badge > 0 ? sv.badge + ' queued' : 'running');
+const nasStatusWord = nas =>
+  (nas.state === 'green' ? 'online' : nas.state === 'orange' ? 'degraded'
+   : nas.state === 'grey' ? 'idle' : 'offline') + (nas.update ? ', update available' : '');
+
+const DASHBOARD_VERSION = "__DASHBOARD_VERSION__";
+let token = localStorage.getItem("token") || "";
+let currentLog = "auto";
+let infoMap = {};
+let embedId = null;  // id of the service currently open in the embed panel
+let embedURL = null; // its URL, so "Open" can pop the same page into its own tab
+
+// Overall-status light: label keyed by the same color the desktop menulet shows.
+const OVERALL_LABELS = { green: "All Clear", blue: "Update Ready", active: "Active",
+                         red: "Degraded", orange: "Attention",
+                         grey: "Disconnected", streaming: "Streaming", running: "Running" };
+// Blue covers two things: a real update available, or just download-queue activity.
+// "Update Ready" wins when any real update is pending; queue-only blue is "Active".
+function hasRealUpdate(s) {
+  return (s && ((s.services || []).some(sv => sv.update) || (s.nasUnits || []).some(n => n.update)));
+}
+// Advanced section visible? Seeded from ?advanced in the URL, else a saved pref.
+let advancedOn = new URLSearchParams(location.search).has("advanced")
+              || localStorage.getItem("advanced") === "1";
+
+function overallStatusName(s) {
+  if (!s || !s.services) return 'grey';
+  if (s.services.some(sv => !sv.ok) || (s.nasUnits || []).some(n => n.state === 'red')) return 'red';
+  if ((s.nasUnits || []).some(n => n.state === 'orange') || s.services.some(sv => sv.warn)) return 'orange';
+  if (s.services.some(sv => sv.update || (sv.badge > 0 && !sv.streaming)) || (s.nasUnits || []).some(n => n.update)) return 'blue';
+  return 'green';
+}
+function setFaviconStatus(name) {
+  const lnk = document.getElementById('favicon');
+  if (lnk) lnk.href = '/menubar-icon-' + name + '.png';
+}
+function updateBadge(s) {
+  if (!('setAppBadge' in navigator)) return;
+  const n = (s.services || []).filter(sv => !sv.ok).length
+          + (s.nasUnits  || []).filter(n  => n.state === 'red').length;
+  if (n > 0) navigator.setAppBadge(n); else navigator.clearAppBadge();
+}
+
+function overallStatusColor(s) {
+  const v = k => getComputedStyle(document.documentElement).getPropertyValue(k).trim();
+  if (!s || !s.services) return v('--sub');
+  if (s.services.some(sv => !sv.ok))                                    return v('--red');
+  if ((s.nasUnits || []).some(n => n.state === 'red'))                   return v('--red');
+  if ((s.nasUnits || []).some(n => n.state === 'orange')
+      || s.services.some(sv => sv.warn))                                 return v('--orange');
+  if (s.services.some(sv => sv.update || (sv.badge > 0 && !sv.streaming))
+      || (s.nasUnits || []).some(n => n.update))                         return v('--blue');
+  return v('--green');
+}
+
+// Paint the overall-status light. Pass null when disconnected (shows grey "—").
+function renderOverall(s) {
+  const name = s ? overallStatusName(s) : 'grey';
+  const v = k => getComputedStyle(document.documentElement).getPropertyValue(k).trim();
+  const dot = $("overall-dot");
+  // A running script (e.g. Kickstart — which transiently downs services) shows as a
+  // green arc spinner labelled "Running", overriding the health color: the system is
+  // mid-operation, so the momentary red/orange is expected (the #progress bar mirrors
+  // this). "Streaming" (Plex playing) similarly overrides an otherwise-green state.
+  // overallStatusName stays a plain color, so the favicon/tab icon still tracks health.
+  const running = !!s && s.anyScriptRunning;
+  const streaming = !running && name === 'green' && !!s && (s.services || []).some(sv => sv.streaming);
+  const spin = running || streaming;
+  dot.classList.toggle('spinning', spin);
+  if (spin) {
+    dot.style.background = '';                // let the .spinning ring show
+    $("overall-label").textContent = running ? OVERALL_LABELS.running : OVERALL_LABELS.streaming;
+  } else {
+    const colorVar = { green: '--green', blue: '--blue', red: '--red',
+                       orange: '--orange', grey: '--border' }[name];
+    dot.style.background = v(colorVar);
+    // Blue-but-no-real-update means the queue is the only thing lit → "Active".
+    const label = (name === 'blue' && !hasRealUpdate(s)) ? OVERALL_LABELS.active : OVERALL_LABELS[name];
+    $("overall-label").textContent = label;
+  }
+}
+
+function setAdvanced(on) {
+  advancedOn = on;
+  document.body.classList.toggle("advanced-open", on);   // drives the centering + slide animation
+  $("advanced-btn").classList.toggle("active", on);
+  try { localStorage.setItem("advanced", on ? "1" : "0"); } catch (e) {}
+  // Keep ?advanced in the URL in sync so the current view is shareable/bookmarkable.
+  history.replaceState(null, "", on ? location.pathname + "?advanced" : location.pathname);
+  if (on) balanceGrid();   // grid just became visible — balance its last row
+}
+function toggleAdvanced() { setAdvanced(!advancedOn); }
+
+function showInfo(id) {
+  const it = infoMap[id]; if (!it) return;
+  $("infotitle").textContent = it.title;
+  $("infobody").textContent = it.info || "";
+  $("infomodal").style.display = "flex";
+}
+function closeInfo() { $("infomodal").style.display = "none"; }
+
+// Log selector: switch the viewer to the chosen log and refresh immediately.
+// (The whole log section is shown/hidden by the Advanced toggle, not here.)
+function selectLog(val) {
+  currentLog = val;
+  logJustSwitched = true;
+  pollLog();
+}
+
+function saveToken() {
+  token = $("tokeninput").value.trim();
+  localStorage.setItem("token", token);
+  updateTokenInfo();
+  poll();
+}
+
+function updateTokenInfo() {
+  const t = localStorage.getItem("token") || "";
+  $("tokeninfo").textContent = t ? `Port 8787 — token: click to copy` : "";
+  $("tokeninfo").title = t ? "Click to copy token" : "";
+}
+
+function copyToken() {
+  const t = localStorage.getItem("token") || "";
+  if (!t) return;
+  navigator.clipboard.writeText(t).then(() => {
+    $("tokeninfo").textContent = "Copied!";
+    setTimeout(updateTokenInfo, 1500);
+  });
+}
+
+function showTokenForm() {
+  $("tokenform").hidden = false;
+  $("dash").hidden = true;
+}
+
+async function api(path, method) {
+  // Abort after 4s so a request that stalls (e.g. the server was quit while a
+  // poll was in flight) fails fast and flips the UI to "not connected" instead
+  // of leaving the last-known state on screen indefinitely.
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 4000);
+  try {
+    const r = await fetch(path, { method: method || "GET",
+                                  headers: { "X-Token": token },
+                                  signal: ctrl.signal });
+    if (r.status === 401) throw "auth";
+    if (!r.ok) throw "http " + r.status;
+    return await r.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function act(method, path) {
+  if (path === "/run/reboot") { openRebootDialog(); return; }
+  try { await api(path, method); } catch (e) {}
+  poll();
+}
+
+// Kickstart Plex runs a multi-step sequence (quit apps, then remount/relaunch).
+// To prevent rapid re-clicks we disable the button while any script is running
+// (s.anyScriptRunning, broad) and, since polling is every 2s, also optimistically
+// from the moment of the click via kickstartPending — render() clears that flag
+// once the server confirms a script is running, then anyScriptRunning drives it.
+let kickstartPending = false;
+function kickstart() {
+  if (kickstartPending) return;
+  kickstartPending = true;
+  applyKickstartState(true, false);      // immediate feedback, covers the poll gap
+  act('POST', '/run/kickstart');
+  // Failsafe: if the run never starts (e.g. server rejected it), don't stay stuck.
+  setTimeout(() => { kickstartPending = false; poll(); }, 6000);
+}
+// `running` = kickstart itself is in progress → spinner + "Working…". `gated` = another
+// script is running → disabled but plain label (no spinner) so it doesn't falsely animate
+// when an unrelated action (Inventory, a remote/scheduled run, etc.) is going.
+let kickRunningApplied = null;
+function applyKickstartState(running, gated) {
+  const kb = $("kickstart-btn");
+  if (!kb) return;
+  kb.disabled = running || gated;                  // disabled attr is safe to set every poll
+  if (running !== kickRunningApplied) {            // only touch innerHTML on a change so the
+    kickRunningApplied = running;                  // spinner animation never restarts mid-run
+    kb.innerHTML = running ? '<span class="btnspin"></span>Working…' : 'Kickstart Plex';
+  }
+}
+
+function openRebootDialog()  { $("rebootdialog").style.display = "flex"; }
+function closeRebootDialog() { $("rebootdialog").style.display = "none"; }
+function confirmVolume(id, label, mounted) {
+  const verb = mounted ? "Unmount" : "Mount";
+  if (confirm(verb + " " + label + "?")) {
+    act("POST", "/" + (mounted ? "unmount" : "mount") + "/" + id);
+  }
+}
+async function doReboot(force) {
+  closeRebootDialog();
+  try { await api(force ? "/run/reboot-force" : "/run/reboot", "POST"); } catch (e) {}
+  poll();
+}
+
+let rawLogLines = [];
+let logJustSwitched = true;
+let rebootStartedAt = null;
+
+function render(s) {
+  if (s.version) $("ver").textContent = "v." + s.version;
+  $("osupdate").hidden = !s.osUpdate;
+  if (s.version && s.version !== DASHBOARD_VERSION) {
+    const key = "reloaded-for-" + s.version;
+    if (!sessionStorage.getItem(key)) {
+      sessionStorage.setItem(key, "1");
+      setTimeout(() => location.reload(), 1500);
+    }
+  }
+
+  // Track when a reboot is actively running so a dropped connection during the
+  // restart shows "rebooting… Ns" instead of a connection error (see catch below).
+  const rebootItem = (s.items || []).find(it => it.id === "reboot");
+  const rebooting = rebootItem && rebootItem.action === "progress";
+  if (rebooting && !rebootStartedAt) rebootStartedAt = Date.now();
+  else if (!rebooting) rebootStartedAt = null;
+
+  infoMap = {};
+  (s.items || []).forEach(it => { infoMap[it.id] = it; });
+
+  // Kickstart control state. "running" = kickstart ITSELF is in progress (its quit
+  // phase reports action "progress", or it was just clicked). "gated" = some OTHER
+  // script is running, so kickstart is disabled (can't be fired) but must NOT animate
+  // — otherwise it would spin during e.g. Inventory. Clear pending once the server
+  // confirms a script is running (then `running` is carried by the kickstart item).
+  if (kickstartPending && s.anyScriptRunning) kickstartPending = false;
+  const kickItem    = (s.items || []).find(it => it.id === "kickstart");
+  const kickRunning = kickstartPending || (kickItem && kickItem.action === "progress");
+  const kickGated   = s.anyScriptRunning && !kickRunning;
+
+  $("rows").innerHTML = (s.items || []).filter(it => !["arr", "sab-update", "dsm-update", "watch"].includes(it.id)).map(it => {
+    const color = ["green","red","blue"].includes(it.color) ? it.color : "";
+    let control;
+    if (it.id === "pause-downloads") {
+      // Toggle: both states POST /run (which flips pause). Icon reflects the current state —
+      // action "stop" means downloads are active (pause icon), "run" means paused (play icon).
+      const active = it.action === "stop";
+      control = `<button class="iconbtn" aria-label="${active ? "Pause" : "Resume"}" title="${active ? "Pause downloads" : "Resume downloads"}" onclick="act('POST','/run/${it.id}')">${active ? ICON.pause : ICON.play}</button>`;
+    }
+    else if (it.action === "stop")
+      control = `<button class="iconbtn" aria-label="Stop" title="Stop" onclick="act('POST','/stop/${it.id}')">${ICON.stop}</button>`;
+    else if (it.action === "force")
+      control = `<button id="force-reboot-btn" class="stop" onclick="doReboot(true)">Force Reboot</button>`;
+    else if (it.action === "progress" || (it.id === "kickstart" && kickstartPending))
+      // Spinner only when this item is genuinely running (its own "progress", or
+      // kickstart just-clicked) — NOT for kickstart while a different action runs.
+      control = `<div class="spinner"></div>`;
+    else if (it.id === "kickstart" && kickGated)
+      // Another script is running: disable kickstart so it can't be fired, but show a
+      // plain (greyed) play button rather than a spinner — it isn't actually running.
+      control = `<button class="iconbtn" disabled aria-label="Run" title="Run">${ICON.play}</button>`;
+    else if (it.id === "kickstart")
+      control = `<button class="iconbtn" aria-label="Run" title="Run" onclick="kickstart()">${ICON.play}</button>`;
+    else
+      control = `<button class="iconbtn" aria-label="Run" title="Run" onclick="act('POST','/run/${it.id}')">${ICON.play}</button>`;
+    return `<div class="row">
+      ${control}
+      <div class="info">
+        <div class="title">${it.title}</div>
+        <div class="status ${color}">${it.status}</div>
+      </div>
+      <button class="infobtn" onclick="showInfo('${it.id}')">ⓘ</button></div>`;
+  }).join("");
+
+  const newServices = (s.services || []).map(sv => {
+    const queued  = sv.badge > 0 && !sv.streaming;
+    const cls     = sv.streaming ? "ok streaming"
+                  : !sv.ok       ? "warn"
+                  : sv.warn      ? "issue"
+                  : sv.update    ? "update"
+                  : queued       ? "queued"
+                  : "ok";
+    const tip   = sv.url ? ` title="${escHtml(sv.url)}"` : "";
+    const aria  = ` aria-label="${escHtml(sv.label)}, ${svcStatusWord(sv)}"`;
+    const hasBadge  = queued && !sv.warn;
+    const badgeHtml = hasBadge ? `<span class="badge">${sv.badge}</span>` : "";
+    // data-badge="1", not a bare attribute: outerHTML serializes bare attributes
+    // as ="" which never string-matched the generated HTML, so badged pills were
+    // rebuilt every poll (dropping hover state) despite the anti-flicker diff.
+    const badgeAttr = hasBadge ? ` data-badge="1"` : "";
+    if (sv.update && sv.ok) {
+      // Update available → blue pill (even alongside a warning, like the desktop apps);
+      // a co-occurring warning shows as an orange dot via the "alerted" class.
+      const alerted = sv.warn ? ' alerted' : '';
+      return `<a href="#" class="update${alerted}"${aria} onclick="showUpdateDialog('${escArg(sv.label)}','${escArg(sv.url || "")}','${escArg(sv.updateScript || "")}','${escArg(sv.id)}');return false;">${badgeHtml}<span>${escHtml(sv.label)}</span></a>`;
+    }
+    const active = sv.id === embedId ? ' active-embed' : '';
+    const noEmb = NO_EMBED.has(sv.id) ? ' no-embed' : '';
+    return sv.url
+      ? `<a href="#" class="${cls}${active}${noEmb}"${aria} data-id="${sv.id}" onclick="openEmbed('${escArg(sv.url)}','${escArg(sv.label)}','${escArg(sv.id)}');return false;"${tip}${badgeAttr}>${badgeHtml}<span>${escHtml(sv.label)}</span></a>`
+      : `<span class="${cls}${noEmb}"${tip}${badgeAttr}${aria} role="img">${badgeHtml}${escHtml(sv.label)}</span>`;
+  });
+  // Targeted update: only replace elements whose HTML changed, so CSS animations aren't interrupted.
+  // Drop any balancer break first so the index-based diff only sees real pills.
+  const lc = $("lights");
+  lc.querySelectorAll(".flexbreak").forEach(b => b.remove());
+  const lch = Array.from(lc.children);
+  newServices.forEach((html, i) => {
+    if (lch[i] && lch[i].outerHTML === html) return;
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    if (lch[i]) lch[i].replaceWith(tmp.firstChild);
+    else lc.appendChild(tmp.firstChild);
+  });
+  while (lc.children.length > newServices.length) lc.removeChild(lc.lastChild);
+
+  const nasEl = $("naslights");
+  const newNasHTML = (s.nasUnits || []).map(nas => {
+    // Health and update are independent: the health class colors the dot, the
+    // `nasupd` class adds the blue update pill — so an update shows on any base.
+    const health = nas.state === "green" ? "ok" : nas.state === "orange" ? "warn" : nas.state === "grey" ? "idle" : "bad";
+    const cls = health + (nas.update ? " nasupd" : "");
+    const tip = nas.url ? ` title="${escHtml(nas.url)}"` : "";
+    const aria = ` aria-label="${escHtml(nas.label)}, ${nasStatusWord(nas)}"`;
+    if (nas.update && nas.url)
+      return `<a href="#" class="${cls}"${aria} onclick="showNASUpdateDialog('${escArg(nas.label)}','${escArg(nas.id)}','${escArg(nas.url)}');return false;">${escHtml(nas.label)}</a>`;
+    const active = nas.id === embedId ? ' active-embed' : '';
+    const noEmb = nas.noEmbed ? ' no-embed' : '';
+    if (nas.mountable) {
+      const mounted = nas.state !== 'grey';
+      // Volumes aren't iframe-able, so tag them no-embed to hide them in tab mode.
+      return `<a href="#" class="${cls} no-embed"${aria} onclick="confirmVolume('${escArg(nas.id)}','${escArg(nas.label)}',${mounted});return false;">${escHtml(nas.label)}</a>`;
+    }
+    return nas.url
+      ? `<a href="#" class="${cls}${active}${noEmb}"${aria} data-id="${nas.id}" onclick="openEmbed('${escArg(nas.url)}','${escArg(nas.label)}','${escArg(nas.id)}',${nas.noEmbed ? 'true' : 'false'});return false;"${tip}>${escHtml(nas.label)}</a>`
+      : `<span class="${cls}${noEmb}"${tip}${aria} role="img">${escHtml(nas.label)}</span>`;
+  }).join("");
+  if (nasEl.innerHTML !== newNasHTML) nasEl.innerHTML = newNasHTML;
+
+  // Friendly empty state when the roster has nothing at all (fresh install
+  // before onboarding adds anything).
+  $("emptystate").hidden = !(newServices.length === 0 && (s.nasUnits || []).length === 0);
+
+  // Show new-service log options only when the server found a log for them.
+  const availLogs = new Set(s.availableLogs || []);
+  $("logselect").querySelectorAll('option[data-newlog]').forEach(opt => {
+    opt.hidden = !availLogs.has(opt.value);
+  });
+  // If the current selection just disappeared, revert to Latest.
+  if (availLogs.size >= 0) {
+    const cur = $("logselect").querySelector(`option[value="${currentLog}"]`);
+    if (cur && cur.dataset.newlog !== undefined && cur.hidden) { currentLog = "auto"; $("logselect").value = "auto"; }
+  }
+
+  $("progress").hidden = !s.anyScriptRunning;
+  // The big Kickstart button only exists when the server sends the kickstart item
+  // (the payload omits action rows the user disabled).
+  $("kickstart-btn").hidden = !kickItem;
+  applyKickstartState(kickRunning, kickGated);
+  setFaviconStatus(overallStatusName(s));
+  renderOverall(s);
+  updateBadge(s);
+  balanceGrid();
+}
+
+// Status-grid line balancing. The grid wraps naturally (flex-wrap), but a last
+// row of just 1–3 items looks lopsided. After layout we read each pill's
+// offsetTop to find the real rows R; if the last row is 1–3 items we spread all
+// N pills evenly across ALL R rows (not just the last two) by inserting
+// full-width breaks (.flexbreak) at the row boundaries — e.g. 9+9+2 → 7+7+6,
+// 9+2 → 6+5. Uses the actual rendered layout, so it's robust to the variable
+// pill widths. Reverts every break if the result didn't land in exactly R rows
+// (wide-item edge cases), so it never makes things worse. Operates on the whole
+// grid as one flow; could later balance #lights and #naslights independently.
+function balanceGrid() {
+  const grid = $("alllights");
+  grid.querySelectorAll(".flexbreak").forEach(b => b.remove());
+  if (!document.body.classList.contains("advanced-open")) return;  // collapsed: grid is 0-height, not display:none
+  if (grid.offsetParent === null) return;                       // hidden (pre-connect)
+  if (document.body.classList.contains("embed-mode")) return;   // tabbed mode: leave the tab row alone
+  const pills = [...$("lights").children, ...$("naslights").children];
+  if (pills.length < 4) return;
+  const computeRows = () => {
+    const out = []; let top = null, row = null;
+    for (const p of pills) {
+      if (top === null || Math.abs(p.offsetTop - top) > 2) { row = []; out.push(row); top = p.offsetTop; }
+      row.push(p);
+    }
+    return out;
+  };
+  const before = computeRows();
+  const R = before.length;
+  if (R < 2) return;
+  if (before[R - 1].length === 0 || before[R - 1].length > 3) return;  // only fix sparse (1–3) last rows
+  // Even split across all R rows: the first `extra` rows get one more.
+  const N = pills.length, base = Math.floor(N / R), extra = N % R;
+  const breaks = [];
+  let idx = 0;
+  for (let i = 0; i < R - 1; i++) {
+    idx += base + (i < extra ? 1 : 0);
+    const target = pills[idx];
+    if (!target) break;
+    const brk = document.createElement("div");
+    brk.className = "flexbreak";
+    target.parentNode.insertBefore(brk, target);               // parent is #lights/#naslights (display:contents)
+    breaks.push(brk);
+  }
+  // Verify: the forced breaks must yield exactly R rows. If a balanced row was
+  // too wide and re-wrapped (R+ rows), revert every break — never regress.
+  if (computeRows().length !== R) breaks.forEach(b => b.remove());
+}
+
+function applyFilter() {
+  const q = $("logfilter").value.trim().toLowerCase();
+  const lines = q ? rawLogLines.filter(l => l.toLowerCase().includes(q)) : rawLogLines;
+  $("log").textContent = lines.join("\n") || "—";
+}
+
+async function poll() {
+  try {
+    const s = await api("/status");
+    $("tokenform").hidden = true;
+    $("dash").hidden = false;
+    $("conn").textContent = "connected";
+    $("conn").className = "ok";
+    $("lights").classList.remove("offline");
+    $("naslights").classList.remove("offline");
+    $("dash").classList.remove("offline");
+    render(s);
+    pollLog();
+  } catch (e) {
+    if (rebootStartedAt && e !== "auth") {
+      const secs = Math.round((Date.now() - rebootStartedAt) / 1000);
+      $("conn").textContent = `rebooting… ${secs}s`;
+      $("conn").className = "rebooting";
+      $("lights").classList.add("offline");
+      $("naslights").classList.add("offline");
+      $("dash").classList.add("offline");
+      setFaviconStatus('grey');
+      renderOverall(null);
+      if (secs > 20) {
+        const spinner = $("rows").querySelector('.spinner');
+        if (spinner) spinner.outerHTML = `<button id="force-reboot-btn" class="stop" onclick="doReboot(true)">Force Reboot</button>`;
+      }
+    } else {
+      $("conn").textContent = e === "auth" ? "wrong token" : "not connected";
+      $("conn").className = "bad";
+      $("lights").classList.add("offline");
+      $("naslights").classList.add("offline");
+      $("dash").classList.add("offline");
+      if (e === "auth" || !token) showTokenForm();
+      setFaviconStatus('grey');
+      renderOverall(null);
+    }
+  }
+}
+
+async function pollLog() {
+  if (!document.body.classList.contains("advanced-open")) return;   // log viewer hidden with Advanced
+  try {
+    const l = await api("/log/" + currentLog);
+    // Fold the source name into the "Latest" option (e.g. "Latest: sonarr.txt")
+    // so the selector itself names the log; revert to plain "Latest" otherwise.
+    const autoOpt = $("logselect").querySelector('option[value="auto"]');
+    if (autoOpt) autoOpt.textContent = currentLog === "auto" ? "Latest: " + l.source : "Latest";
+    rawLogLines = l.lines || [];
+    const pre = $("log");
+    const atBottom = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 40;
+    const shouldScroll = logJustSwitched || atBottom;
+    logJustSwitched = false;
+    applyFilter();
+    if (shouldScroll) pre.scrollTop = pre.scrollHeight;
+  } catch (e) {}
+}
+
+function showUpdateDialog(label, url, script, id) {
+  $('updatedialogtitle').textContent = label + ' — update available';
+  const runBtn = $('updatedialog-run');
+  if (script) {
+    runBtn.textContent = 'Run Update';
+    runBtn.onclick = () => { closeUpdateDialog(); act('POST', '/run/' + script); };
+    runBtn.hidden = false;
+  } else {
+    runBtn.hidden = true;
+  }
+  $('updatedialog-single').hidden = true;
+  const openBtn = $('updatedialog-open');
+  if (url) {
+    openBtn.textContent = 'Open ' + label;
+    // Mirror a normal pill click: embed if embeddable, else openEmbed falls back to a new window.
+    openBtn.onclick = () => { closeUpdateDialog(); openEmbed(url, label, id); };
+    openBtn.hidden = false;
+  } else {
+    openBtn.hidden = true;
+  }
+  $('updatedialog').style.display = 'flex';
+}
+function showNASUpdateDialog(label, nasId, url) {
+  $('updatedialogtitle').textContent = label + ' — DSM update available';
+  const runBtn = $('updatedialog-run');
+  runBtn.textContent = 'Update All DSMs';
+  runBtn.onclick = () => { closeUpdateDialog(); act('POST', '/run/dsm-update'); };
+  const singleBtn = $('updatedialog-single');
+  singleBtn.textContent = 'Update ' + label;
+  singleBtn.onclick = () => { closeUpdateDialog(); act('POST', '/run/dsm-update-single/' + nasId); };
+  singleBtn.hidden = false;
+  const openBtn = $('updatedialog-open');
+  if (url) {
+    openBtn.textContent = 'Open ' + label;
+    openBtn.onclick = () => { closeUpdateDialog(); window.open(url, '_blank'); };
+    openBtn.hidden = false;
+  } else {
+    openBtn.hidden = true;
+  }
+  $('updatedialog').style.display = 'flex';
+}
+function closeUpdateDialog() { $('updatedialog').style.display = 'none'; }
+
+// Generic service ids whose web UI blocks iframe embedding — open in a new tab.
+// qbittorrent ships clickjacking protection (X-Frame-Options/CSP) that blocks
+// iframes by default, so it's opened in a new tab like the others here.
+// NAS units are flagged per-item via the payload `noEmbed` (all Synology DSM), so no
+// hardcoded NAS ids here.
+const NO_EMBED = new Set(['pihole', 'cloudkey', 'tailscale', 'qbittorrent']);
+
+function openEmbed(url, label, id, noEmbed) {
+  if (noEmbed || NO_EMBED.has(id)) { window.open(url, '_blank'); return; }
+  // Instant active-pill highlight (render() also bakes it in on next tick)
+  document.querySelectorAll('#lights > a.active-embed, #naslights > a.active-embed')
+    .forEach(el => el.classList.remove('active-embed'));
+  embedId = id || null;
+  if (id) {
+    const el = document.querySelector(`[data-id="${id}"]`);
+    if (el) el.classList.add('active-embed');
+  }
+  $('embed-label').textContent = label || '';
+  embedURL = url;
+  $('embed-frame').src = url;
+  document.body.classList.add('embed-mode');
+}
+
+function closeEmbed() {
+  embedId = null;
+  embedURL = null;
+  $('embed-frame').src = 'about:blank';
+  document.body.classList.remove('embed-mode');
+}
+
+// Pop the embedded page out into its own tab/window, then collapse the panel.
+// Only collapse if the pop-out actually opened (a blocked popup leaves it in place).
+function popEmbedOut() {
+  if (!embedURL) return;
+  const w = window.open(embedURL, '_blank');
+  if (w) closeEmbed();
+}
+
+setFaviconStatus('grey');
+setAdvanced(advancedOn);
+setInterval(poll, 2000);
+// Browsers throttle timers in hidden/backgrounded tabs (often to ~1/min), so a
+// dashboard left in the background can lag the real state. Poll immediately
+// whenever the tab is brought back to the foreground.
+document.addEventListener("visibilitychange", () => { if (!document.hidden) poll(); });
+window.addEventListener("focus", poll);
+// Re-balance the status grid when the viewport width changes the wrapping.
+let balancePending = false;
+window.addEventListener("resize", () => {
+  if (balancePending) return;
+  balancePending = true;
+  requestAnimationFrame(() => { balancePending = false; balanceGrid(); });
+});
+poll();
+updateTokenInfo();
+</script>
+</body>
+</html>

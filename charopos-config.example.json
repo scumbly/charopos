@@ -1,0 +1,116 @@
+{
+  "synologyUser": "",
+  "synologyPass": "",
+  "nasMountUser": "",
+
+  "sabnzbdApiKey": "",
+  "sonarrApiKey": "",
+  "radarrApiKey": "",
+  "lidarrApiKey": "",
+  "prowlarrApiKey": "",
+  "jellyfinApiKey": "",
+  "bazarrApiKey": "",
+  "overseerrApiKey": "",
+  "tautulliApiKey": "",
+  "qbitUser": "",
+  "qbitPass": "",
+
+  "piholePassword": "",
+  "piholeSshTarget": "pi@pihole.local",
+  "piholeSshKey": "",
+  "cloudKeyHost": "",
+  "cloudKeySshKey": "",
+
+  "prowlApiKey": "",
+  "dashboardURL": "",
+
+  "apiBindMode": "loopback",
+
+  "serviceURLs": {
+    "sab":         { "url": "http://127.0.0.1:8080/",  "openURL": "http://127.0.0.1:8080" },
+    "sonarr":      { "url": "http://127.0.0.1:8989/",  "openURL": "http://127.0.0.1:8989" },
+    "radarr":      { "url": "http://127.0.0.1:7878/",  "openURL": "http://127.0.0.1:7878" },
+    "prowlarr":    { "url": "http://127.0.0.1:9696/",  "openURL": "http://127.0.0.1:9696" },
+    "lidarr":      { "url": "http://127.0.0.1:8686/",  "openURL": "http://127.0.0.1:8686" },
+    "plex":        { "url": "http://127.0.0.1:32400/", "openURL": "http://127.0.0.1:32400/web" },
+    "jellyfin":    { "url": "http://127.0.0.1:8096/",  "openURL": "http://127.0.0.1:8096" },
+    "bazarr":      { "url": "http://127.0.0.1:6767/",  "openURL": "http://127.0.0.1:6767" },
+    "overseerr":   { "url": "http://127.0.0.1:5055/",  "openURL": "http://127.0.0.1:5055" },
+    "tautulli":    { "url": "http://127.0.0.1:8181/",  "openURL": "http://127.0.0.1:8181" },
+    "qbittorrent": { "url": "http://127.0.0.1:8085/",  "openURL": "http://127.0.0.1:8085" },
+    "pihole":      { "url": "http://pihole.local/admin/", "openURL": "http://pihole.local/admin/" },
+    "cloudkey":    { "url": "https://unifi.local/",    "openURL": "https://unifi.ui.com/" }
+  },
+
+  "disabledServices": [
+    "jellyfin", "bazarr", "overseerr", "tautulli", "qbittorrent"
+  ],
+
+  "nasUnits": [
+    {
+      "id": "nas1",
+      "label": "Media",
+      "checkURL": "https://nas.local:5001",
+      "openURL": "https://nas.local:5001",
+      "mountPoint": "/Volumes/Media",
+      "mountSource": "smb://nas.local/Media",
+      "suppressSpaceAlert": false
+    }
+  ],
+
+  "localVolumes": [
+    {
+      "id": "scratch",
+      "label": "Scratch",
+      "mountPoint": "/Volumes/Scratch",
+      "suppressSpaceAlert": false
+    }
+  ],
+
+  "actionPlacements": {
+    "mount": "main",
+    "kickstart": "main",
+    "reboot": "main",
+    "check-updates": "menu",
+    "backup": "menu",
+    "inventory": "none",
+    "iperf": "none",
+    "kickstart-jellyfin": "none",
+    "scan-libraries": "none",
+    "clear-transcode": "none",
+    "pause-downloads": "none",
+    "bazarr-search": "none",
+    "pihole-gravity": "none"
+  },
+
+  "notifyServices": "true",
+  "notifyStorage": "true",
+  "notifyHost": "true",
+
+  "alertServiceDown": "true",
+  "alertUpdatesAvailable": "true",
+  "alertNASOffline": "true",
+  "alertDiskSpace": "true",
+  "alertSMARTFailure": "true",
+  "alertSMARTReallocated": "true",
+  "alertTimeMachineError": "true",
+  "alertUPSOnBattery": "true",
+  "alertUPSLowBattery": "true",
+  "alertMemoryPressure": "true",
+  "alertSwapHigh": "true",
+  "alertExternalIPChange": "true",
+  "alertNTPDrift": "true",
+  "alertZombieProcess": "true",
+
+  "svcDownMinutes": "5",
+  "diskAlertThreshold": "90",
+  "swapAlertPct": "25",
+  "upsBatteryLowPct": "20",
+
+  "ghostMonitorEnabled": "true",
+  "inventoryEnabled": "false",
+  "inventoryDays": "7",
+
+  "hideDockIcon": "false",
+  "showWindowAtStartup": "false"
+}

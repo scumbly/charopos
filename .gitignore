@@ -1,0 +1,20 @@
+# Generated at build time
+Version.swift
+AppIcon.iconset/
+*.icns
+
+# Compiled binaries (app bundles live in parent dir, not here)
+Charopos
+CharoposRemote
+
+# Local assistant settings (machine-specific paths)
+.claude/
+
+# macOS metadata
+.DS_Store
+
+# Internal working docs — kept on disk, never published. CLAUDE.md is the
+# assistant's working notes on this codebase; PUBLIC_RELEASE_PLAN.md is the
+# open-sourcing plan. Both discuss the maintainer's own homelab.
+CLAUDE.md
+PUBLIC_RELEASE_PLAN.md
