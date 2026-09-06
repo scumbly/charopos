@@ -319,9 +319,9 @@ final class CertPinStore {
             break
         case .mismatch:
             if shouldAlert {
-                AppLog.shared.write("Certificates: REFUSED \(host) — \(mismatchReason ?? "identity changed"). If you replaced this host's certificate yourself, clear the pin in Settings → Services → Certificates.")
+                AppLog.shared.write("Certificates: REFUSED \(host) — \(mismatchReason ?? "identity changed"). It is marked REFUSED in Settings → Services → Certificates; accept the new key there if you replaced this host's certificate yourself.")
                 handler?("Certificate Changed",
-                         "\(host) presented a different TLS certificate, so Charopos blocked the connection rather than send credentials to a host it can't verify. If you replaced the certificate yourself, clear the pin in Settings → Services → Certificates.")
+                         "\(host) presented a different TLS certificate, so Charopos blocked the connection rather than send credentials to a host it can't verify. It is marked REFUSED in Settings → Services → Certificates; accept the new key there if you replaced the certificate yourself.")
             }
         }
         return result
