@@ -66,6 +66,7 @@ struct PreferencesView: View {
     @State private var tokenJustRotated = false                 // transient confirmation after Rotate API Token…
     @State private var showRotateTokenAlert = false
     @State private var showForgetCertsAlert = false            // confirm before dropping pinned TLS certs
+    @State private var pendingTrustHost: String? = nil         // host whose newly-presented key is being accepted
     @State private var certsRevision = 0                       // bumped to re-read CertPinStore after a reset
     @State private var storageSelection:  String? = nil   // "nas:<id>" or "vol:<id>"
     @State private var servicesSelection: String? = nil   // service id, or "synology"/"prowl"
@@ -724,7 +725,10 @@ struct PreferencesView: View {
 
     @ViewBuilder
     private var certificatesDetail: some View {
-        let pins = { _ = certsRevision; return CertPinStore.shared.summary }()
+        // certsRevision covers this pane's own edits; certMismatchHosts covers a
+        // refusal that starts (or clears) on a poll tick while the pane is open.
+        let pins = { _ = certsRevision; _ = runner.certMismatchHosts
+                     return CertPinStore.shared.summary }()
         detailScaffold("Certificates", symbol: serviceSymbol("certs"),
                        subtitle: "Remembered TLS identities of your local hosts") {
             Text("NAS and Pi-hole boxes usually serve a certificate no public authority has signed, so Charopos remembers the one each host presents the first time it connects and refuses that host if it later presents a different one. That keeps the DSM and Pi-hole passwords from being handed to whatever is answering at that address.")
@@ -737,35 +741,71 @@ struct PreferencesView: View {
             } else {
                 ForEach(pins, id: \.host) { pin in
                     let label = Runner.shared.labelForPinnedHost(pin.host)
+                    // A host being refused right now is the one thing this pane
+                    // exists to show. It used to render identically to a healthy
+                    // pin, which left a blocked NAS looking fine here while its
+                    // light sat amber with no stated cause.
+                    let refused = !pin.mismatchFP.isEmpty
                     HStack(spacing: 6) {
-                        Image(systemName: pin.mode == "system" ? "checkmark.seal" : "lock.shield")
-                            .foregroundStyle(pin.mode == "system" ? .green : .secondary)
+                        Image(systemName: refused ? "exclamationmark.shield"
+                                        : pin.mode == "system" ? "checkmark.seal" : "lock.shield")
+                            .foregroundStyle(refused ? .red
+                                             : pin.mode == "system" ? .green : .secondary)
                             .frame(width: 16)
                         VStack(alignment: .leading, spacing: 1) {
                             // Lead with the name this host goes by everywhere else in
                             // the app; the host:port is what's actually pinned, so it
                             // stays visible either way.
-                            if let label {
-                                HStack(spacing: 6) {
+                            HStack(spacing: 6) {
+                                if let label {
                                     Text(label)
                                     Text(pin.host).foregroundStyle(.secondary)
+                                } else {
+                                    Text(pin.host)
                                 }
-                            } else {
-                                Text(pin.host)
+                                if refused {
+                                    Text("REFUSED").font(.caption2.weight(.semibold))
+                                        .foregroundStyle(.red)
+                                }
                             }
-                            Text(pin.mode == "system"
-                                 ? "Publicly trusted certificate — validated normally"
-                                 : "Self-signed, trusted on first use\(pin.firstSeen.isEmpty ? "" : ", \(pin.firstSeen)") · key \(CertPinStore.short(pin.fingerprint))")
-                                .font(.caption).foregroundStyle(.secondary)
+                            if refused {
+                                Text("Presenting key \(CertPinStore.short(pin.mismatchFP))\(pin.mismatchSeen.isEmpty ? "" : " since \(pin.mismatchSeen)") — pinned key is \(CertPinStore.short(pin.fingerprint)). Connections to this host are blocked.")
+                                    .font(.caption).foregroundStyle(.red)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            } else {
+                                Text(pin.mode == "system"
+                                     ? "Publicly trusted certificate — validated normally"
+                                     : "Self-signed, trusted on first use\(pin.firstSeen.isEmpty ? "" : ", \(pin.firstSeen)") · key \(CertPinStore.short(pin.fingerprint))")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
                         }
                         Spacer()
+                        if refused {
+                            Button("Trust New Certificate\u{2026}") { pendingTrustHost = pin.host }
+                                .buttonStyle(.borderless)
+                                .help("Pin the key this host is presenting now, replacing the one it failed against")
+                        }
                         Button("Forget") {
                             CertPinStore.shared.forget(pin.host)
+                            Runner.shared.refreshCertMismatches()
                             certsRevision += 1
                         }
                         .buttonStyle(.borderless)
                         .help("Forget this host's certificate — the next connection will trust what it presents")
                     }
+                }
+                .alert("Trust the certificate this host is presenting?",
+                       isPresented: Binding(get: { pendingTrustHost != nil },
+                                            set: { if !$0 { pendingTrustHost = nil } }),
+                       presenting: pendingTrustHost) { host in
+                    Button("Trust", role: .destructive) {
+                        CertPinStore.shared.trustPresented(host)
+                        Runner.shared.refreshCertMismatches()
+                        certsRevision += 1
+                    }
+                    Button("Cancel", role: .cancel) { }
+                } message: { host in
+                    Text("Charopos will pin the key \(host) is presenting now and resume talking to it, including sending its password. Do this only if you know why the certificate changed — a NAS you rebuilt, a certificate you replaced, or a DSM that regenerated its own. If you didn't expect the change, leave it refused and find out why first.")
                 }
             }
             Divider().padding(.vertical, 2)

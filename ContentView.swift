@@ -544,7 +544,13 @@ struct ContentView: View {
                             let stateWord = nasState == "green" ? "online"
                                 : nasState == "orange" ? "degraded"
                                 : nasState == "grey" ? "idle" : "offline"
-                            let a11y = "\(nas.label), \(stateWord)" + (nasHasUpdate ? ", update available" : "")
+                            // A refused certificate presents as a plain unreachable
+                            // unit, so the light has to name the cause itself —
+                            // otherwise amber reads as "network blip" indefinitely.
+                            let certRefused = runner.nasCertRefused(for: nas.id)
+                            let a11y = "\(nas.label), \(stateWord)"
+                                + (certRefused ? ", certificate refused" : "")
+                                + (nasHasUpdate ? ", update available" : "")
                             let pill = Button {
                                 if nasState == "red" {
                                     confirmAction = ConfirmAction(id: nas.id, label: nas.label, kind: .nas)
@@ -561,7 +567,9 @@ struct ContentView: View {
                             }
                             .buttonStyle(.plain)
                             .onHover { hoveredLightId = $0 ? nas.id : nil }
-                            .help(nas.openURL)
+                            .help(certRefused
+                                  ? "Certificate refused — \(nas.label) is presenting a different TLS key, so its health check is blocked. Review it in Settings → Services → Certificates."
+                                  : nas.openURL)
                             .contextMenu {
                                 if let url = nasURL {
                                     Button("Open \(nas.label)") { NSWorkspace.shared.open(url) }

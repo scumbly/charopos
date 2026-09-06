@@ -183,7 +183,9 @@ final class CertPinStore {
         lock.lock(); alertHandler = handler; lock.unlock()
     }
 
-    // MARK: Persistence — UserDefaults: [host: ["mode": …, "fp": …, "seen": …]]
+    // MARK: Persistence — UserDefaults:
+    //   [host: ["mode": …, "fp": …, "seen": …,
+    //           "badfp": …, "badseen": …]]   ← the last two only while refused
 
     private func loadPins() -> [String: [String: String]] {
         UserDefaults.standard.dictionary(forKey: defaultsKey) as? [String: [String: String]] ?? [:]
@@ -192,14 +194,40 @@ final class CertPinStore {
         UserDefaults.standard.set(pins, forKey: defaultsKey)
     }
 
-    /// The hosts we currently remember, for the Settings list.
-    var summary: [(host: String, mode: String, firstSeen: String, fingerprint: String)] {
+    /// The hosts we currently remember, for the Settings list. `mismatchFP` is
+    /// non-empty while a host is being refused: the key it is presenting now,
+    /// recorded beside — never over — the pinned key it failed against.
+    var summary: [(host: String, mode: String, firstSeen: String, fingerprint: String,
+                   mismatchFP: String, mismatchSeen: String)] {
         lock.lock(); defer { lock.unlock() }
         return loadPins().map { (host: $0.key,
                                  mode: $0.value["mode"] ?? "tofu",
                                  firstSeen: $0.value["seen"] ?? "",
-                                 fingerprint: $0.value["fp"] ?? "") }
+                                 fingerprint: $0.value["fp"] ?? "",
+                                 mismatchFP: $0.value["badfp"] ?? "",
+                                 mismatchSeen: $0.value["badseen"] ?? "") }
             .sorted { $0.host < $1.host }
+    }
+
+    /// Hosts whose health checks are currently being refused over a changed key.
+    /// Read every poll tick, so it stays a plain dictionary lookup.
+    var mismatchedHosts: Set<String> {
+        lock.lock(); defer { lock.unlock() }
+        return Set(loadPins().filter { !($0.value["badfp"] ?? "").isEmpty }.keys)
+    }
+
+    /// Accept the key `host` is presenting now, replacing the pin it failed
+    /// against. Narrower than `forget`: this trusts the specific key already
+    /// seen and refused, rather than whatever answers on the next connection.
+    func trustPresented(_ host: String) {
+        lock.lock()
+        var pins = loadPins()
+        guard let presented = pins[host]?["badfp"], !presented.isEmpty else { lock.unlock(); return }
+        pins[host] = ["mode": "tofu", "fp": presented, "seen": Self.stamp.string(from: Date())]
+        savePins(pins)
+        alerted = alerted.filter { !$0.hasPrefix("\(host)|") }
+        lock.unlock()
+        AppLog.shared.write("Certificates: now trusting the certificate \(host) presents (key \(Self.short(presented)))")
     }
 
     /// Forget one host's certificate — the surgical version of `forgetAll`, for
@@ -263,8 +291,21 @@ final class CertPinStore {
                 mismatchReason = "public key changed (was \(Self.short(previousFP)), now \(Self.short(fingerprint)))"
             }
         }
-        if mismatchReason == nil { savePins(pins) }
-        // Dedupe per host+key so a standing mismatch alerts once, not every poll.
+        if result == .mismatch {
+            // The pinned key and mode are left exactly as they were — a refusal
+            // must never quietly become the new pin. The refused key is filed
+            // beside it so Settings can name what is standing and offer to
+            // accept it deliberately, and so the light can say why it is amber.
+            pins[host]?["badfp"]   = fingerprint
+            pins[host]?["badseen"] = today
+        } else {
+            pins[host]?.removeValue(forKey: "badfp")
+            pins[host]?.removeValue(forKey: "badseen")
+        }
+        savePins(pins)
+        // Dedupe per host+key: a standing mismatch is re-derived every poll
+        // (~2/10s per host), so both the alert *and* the log line fire once per
+        // launch. The condition stays visible in Settings, not in the log tail.
         let shouldAlert = mismatchReason != nil && alerted.insert("\(host)|\(fingerprint)").inserted
         let handler = alertHandler
         lock.unlock()
@@ -277,8 +318,8 @@ final class CertPinStore {
         case .matched:
             break
         case .mismatch:
-            AppLog.shared.write("Certificates: REFUSED \(host) — \(mismatchReason ?? "identity changed"). If you replaced this host's certificate yourself, clear the pin in Settings → Services → Certificates.")
             if shouldAlert {
+                AppLog.shared.write("Certificates: REFUSED \(host) — \(mismatchReason ?? "identity changed"). If you replaced this host's certificate yourself, clear the pin in Settings → Services → Certificates.")
                 handler?("Certificate Changed",
                          "\(host) presented a different TLS certificate, so Charopos blocked the connection rather than send credentials to a host it can't verify. If you replaced the certificate yourself, clear the pin in Settings → Services → Certificates.")
             }

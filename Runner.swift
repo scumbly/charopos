@@ -555,6 +555,11 @@ final class Runner: ObservableObject {
 
     /// Health state for local volumes: "green" | "orange" | "red".
     @Published var volumeHealth: [String: String] = [:]
+    /// Hosts `CertPinStore` is currently refusing, mirrored here so the NAS
+    /// lights and the Certificates pane redraw when a refusal starts or clears.
+    /// A refused host reads as an ordinary unreachable unit otherwise, which is
+    /// exactly the confusion this exists to remove.
+    @Published var certMismatchHosts: Set<String> = []
 
     /// Last-seen BSD device identifier per local volume id (e.g. "disk10s1"),
     /// captured while the volume is mounted and persisted across unmount and
@@ -1619,6 +1624,7 @@ final class Runner: ObservableObject {
             checkOSUpdates()
             pollNASHealth()
             pollDSMHealth()
+            refreshCertMismatches()
             pollVolumeHealth()
             checkDiskSpace()
             pollSABnzbd()
@@ -3424,6 +3430,25 @@ final class Runner: ObservableObject {
         return port == 443 ? host : "\(host):\(port)"
     }
 
+    /// Pull `CertPinStore`'s standing refusals into the published mirror.
+    /// Main-thread only (called from the poll tick); the store read is a single
+    /// UserDefaults dictionary lookup, and the assignment is gated on a change
+    /// so an unchanged set doesn't republish every tick.
+    func refreshCertMismatches() {
+        let hosts = CertPinStore.shared.mismatchedHosts
+        if hosts != certMismatchHosts { certMismatchHosts = hosts }
+    }
+
+    /// Whether this NAS unit's health check is being refused because its TLS key
+    /// changed. That refusal is indistinguishable from a network fault in the
+    /// state machine — both land on "mounted but not reachable" — so the light
+    /// needs this to explain itself.
+    func nasCertRefused(for id: String) -> Bool {
+        guard let nas = nasUnits.first(where: { $0.id == id }),
+              let key = Self.pinKey(forURL: nas.checkURL) else { return false }
+        return certMismatchHosts.contains(key)
+    }
+
     /// The name this pinned host goes by elsewhere in the app — a NAS unit's
     /// label, a service's label. nil when nothing in the roster maps to it.
     func labelForPinnedHost(_ key: String) -> String? {
@@ -3843,6 +3868,7 @@ final class Runner: ObservableObject {
         nasHealth     = [:]
         nasAlertState = [:]
         volumeHealth  = [:]
+        certMismatchHosts = []
         // Health/queue/NAS/volume state restores on the next 2s/10s pollAll, but the
         // update flags only refresh at launch + hourly — re-run them now so real update
         // indicators (e.g. an available *arr/SAB/Plex update) come back immediately
