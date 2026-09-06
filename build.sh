@@ -9,6 +9,17 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+# --release additionally packages both signed bundles into ../Charopos-<ver>.zip,
+# ready to attach to a GitHub release. Plain `./build.sh` just builds in place.
+MAKE_RELEASE=0
+for arg in "$@"; do
+    case "$arg" in
+        --release) MAKE_RELEASE=1 ;;
+        -h|--help) echo "usage: $0 [--release]"; exit 0 ;;
+        *) echo "unknown option: $arg (try --help)" >&2; exit 2 ;;
+    esac
+done
+
 # ---------------------------------------------------------------- version
 MAJOR=4
 MINOR_FILE="version_minor.txt"
@@ -163,4 +174,44 @@ echo "Built: Charopos Remote.app"
 
 [[ -n "$ICON_TMP" ]] && rm -rf "$(dirname "$ICON_TMP")"
 rm -f Version.swift
+
+# ---------------------------------------------------------------- release zip
+if [[ $MAKE_RELEASE -eq 1 ]]; then
+    REL_NAME="Charopos-${MAJOR}.${MINOR}"
+    REL_DIR="../${REL_NAME}"
+    REL_ZIP="../${REL_NAME}.zip"
+    echo "Packaging ${REL_NAME}.zip..."
+    rm -rf "$REL_DIR" "$REL_ZIP"
+    mkdir -p "$REL_DIR"
+    cp -R "$APP" "$REMOTE_APP" "$REL_DIR/"
+    # cp re-attaches the xattrs strip_metadata cleared, so clear them again on the
+    # copies. com.apple.provenance survives regardless (macOS applies it and won't
+    # let it go), which is why the archive itself must also exclude xattrs: without
+    # --noextattr --norsrc, ditto writes one ._ AppleDouble file per attribute —
+    # 51 of them in the 4.93 zip.
+    xattr -cr "$REL_DIR" 2>/dev/null || true
+    ditto -c -k --keepParent --noextattr --norsrc "$REL_DIR" "$REL_ZIP"
+
+    # Verify from an extraction, not from the staging folder: the staged copy can
+    # be fine while the archive is not, and a broken signature is invisible until
+    # somebody downloads it.
+    VERIFY_DIR=$(mktemp -d)
+    ditto -x -k "$REL_ZIP" "$VERIFY_DIR"
+    for bundle in "Charopos.app" "Charopos Remote.app"; do
+        if ! codesign --verify --deep --strict "$VERIFY_DIR/$REL_NAME/$bundle" 2>/dev/null; then
+            echo "ERROR: $bundle fails signature verification after archiving" >&2
+            rm -rf "$VERIFY_DIR"
+            exit 1
+        fi
+    done
+    LEFTOVER=$(unzip -l "$REL_ZIP" | grep -c "/\._" || true)
+    if [[ "$LEFTOVER" -ne 0 ]]; then
+        echo "ERROR: $LEFTOVER AppleDouble file(s) in the archive" >&2
+        rm -rf "$VERIFY_DIR"
+        exit 1
+    fi
+    rm -rf "$VERIFY_DIR" "$REL_DIR"
+    echo "Release archive: ${REL_ZIP#../} ($(du -h "$REL_ZIP" | cut -f1)) — both bundles verified, no metadata files"
+fi
+
 echo "Done. Built version ${VERSION}."
