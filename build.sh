@@ -85,6 +85,20 @@ install_icon() {  # $1 = app bundle path
 DEPLOY_TARGET="13.0"
 ARCHS=(arm64 x86_64)
 
+# Clears extended attributes inherited from the source assets before signing.
+# The icon PNGs in particular carry com.apple.quarantine (they were downloaded
+# or edited), Finder tags, and editor document state; `cp` brings those into the
+# bundle, where they surface as ._ AppleDouble files in any archive made from it
+# — 51 of them in the 4.93 release zip. Signatures live in _CodeSignature and
+# the Mach-O, not in xattrs, so this is safe to do before codesign.
+#
+# com.apple.provenance is applied by macOS and cannot be removed; keep it out of
+# a release archive at zip time instead:
+#   ditto -c -k --keepParent --noextattr --norsrc <folder> <folder>.zip
+strip_metadata() {   # $1 = bundle path
+    xattr -cr "$1" 2>/dev/null || true
+}
+
 build_universal() {   # $1 = output binary path, $2... = source files
   local out="$1"; shift
   local slices=()
@@ -128,6 +142,7 @@ echo "Embedding web dashboard..."
 sed "s/__DASHBOARD_VERSION__/${VERSION}/g" dashboard.html > "$APP/Contents/Resources/dashboard.html"
 
 install_icon "$APP"
+strip_metadata "$APP"
 codesign --force --sign - "$APP"
 echo "Built: Charopos.app"
 
@@ -142,6 +157,7 @@ mv CharoposRemote "$REMOTE_APP/Contents/MacOS/CharoposRemote"
 cp Info-Remote.plist "$REMOTE_APP/Contents/Info.plist"
 
 install_icon "$REMOTE_APP"
+strip_metadata "$REMOTE_APP"
 codesign --force --sign - "$REMOTE_APP"
 echo "Built: Charopos Remote.app"
 
